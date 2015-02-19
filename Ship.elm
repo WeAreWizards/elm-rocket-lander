@@ -93,7 +93,7 @@ genericScreen borderColor heading =
               ]]
   [ h2 [style [("margin", "0")]] [text heading]
   , p [] [text "Land gently on the red platform before running out of fuel."]
-  , p [] [text "Use < and > to roll the ship, ^ to boost."]
+  , p [] [text "Use ← and → to roll the ship, ↑ to boost."]
   , p [] [text "Press SPACE to start."]
   ]
 
