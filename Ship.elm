@@ -1,14 +1,14 @@
 import Char
 import Color
-import Graphics.Element (..)
-import Graphics.Collage (..)
+import Graphics.Element exposing (..)
+import Graphics.Collage exposing (..)
 import Signal
 import Window
 import Keyboard
-import Html (..)
-import Html.Attributes (..)
+import Html exposing (..)
+import Html.Attributes exposing (..)
 import String
-import Time(fps)
+import Time
 import Random
 import List
 
@@ -62,23 +62,23 @@ keyInput = Signal.merge
   (Signal.map SpaceInput spacePressed)
 
 model : Signal Game
-model = Signal.foldp update makeGame (Signal.sampleOn (fps 30) keyInput)
+model = Signal.foldp update makeGame (Signal.sampleOn (Time.fps 30) keyInput)
 
 
 update : KeyInput -> Game -> Game
 update input game =
   case game.state of
     PreRunning -> case input of
-      SpaceInput True -> { game | state <- Running }
+      SpaceInput True -> { game | state = Running }
       _               -> game
     Running -> case input of
       ArrowInput arrows -> updateRunning arrows game
       _                 -> updateRunning {x=0, y=0} game
     Lost -> case input of
-      SpaceInput True -> { makeGame | state <- Running }
+      SpaceInput True -> { makeGame | state = Running }
       _               -> game
     Won -> case input of
-      SpaceInput True -> { makeGame | state <- Running }
+      SpaceInput True -> { makeGame | state = Running }
       _               -> game
 
 
@@ -91,10 +91,10 @@ genericScreen borderColor heading =
               , ("border", "2px solid")
               , ("border-color", borderColor)
               ]]
-  [ h2 [style [("margin", "0")]] [text heading]
-  , p [] [text "Land gently on the red platform before running out of fuel."]
-  , p [] [text "Use < and > to roll the ship, ^ to boost."]
-  , p [] [text "Press SPACE to start."]
+  [ h2 [style [("margin", "0")]] [Html.text heading]
+  , p [] [Html.text "Land gently on the red platform before running out of fuel."]
+  , p [] [Html.text "Use < and > to roll the ship, ^ to boost."]
+  , p [] [Html.text "Press SPACE to start."]
   ]
 
 startScreen = genericScreen "#eee" "Rocket lander in Elm."
@@ -109,9 +109,9 @@ statsScreen (w, h) game =
   in
   container w h topRight <| toElement 200 100 <|
   div [style [("font-family", "monospace"), ("color", "#fff")]]
-  [ p [] [ text ("Fuel: " ++ toString game.ship.fuel) ]
-  , p [style [speedColor]] [ text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed game.ship))) ]
-  , p [style [rollColor]] [ text ("Roll: " ++ String.slice 0 6 (toString (game.ship.roll))) ]
+  [ p [] [ Html.text ("Fuel: " ++ toString game.ship.fuel) ]
+  , p [style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed game.ship))) ]
+  , p [style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (game.ship.roll))) ]
   ]
 
 updateRunning : {x: Int, y: Int} -> Game -> Game
@@ -125,10 +125,10 @@ updateRunning arrows game =
     (platformPos, landscape) = generateLandscape
   in
     case (isShipAlive (ship.x, ship.y) landscape, isShipLanded ship platformPos) of
-      (True, False)  -> {game | ship <- ship}
-      (True, True)   -> {game | state <- Won}
-      (False, True)  -> {game | state <- Lost}
-      (False, False) -> {game | state <- Lost}
+      (True, False)  -> {game | ship = ship}
+      (True, True)   -> {game | state = Won}
+      (False, True)  -> {game | state = Lost}
+      (False, False) -> {game | state = Lost}
 
 
 shipUpdate : Float -> Bool -> Int -> Ship -> Ship
@@ -140,13 +140,13 @@ shipUpdate g boosting roll ship =
     fuel' = if boosting then ship.fuel - 3 else ship.fuel
     fuel'' = if abs roll > 0 then fuel' - 1 else fuel'
   in
-    { ship | vy <- ship.vy - g + accell.y
-           , vx <- ship.vx + accell.x
-           , y <- ship.y + ship.vy
-           , x <- ship.x + ship.vx
-           , boosting <- boosting
-           , fuel <- fuel''
-           , roll <- ship.roll - ( (toFloat roll) / 20.0)
+    { ship | vy = ship.vy - g + accell.y
+           , vx = ship.vx + accell.x
+           , y = ship.y + ship.vy
+           , x = ship.x + ship.vx
+           , boosting = boosting
+           , fuel = fuel''
+           , roll = ship.roll - ( (toFloat roll) / 20.0)
            }
 
 paint : Game -> (Int, Int) -> Element
