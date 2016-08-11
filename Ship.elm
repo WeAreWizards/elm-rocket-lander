@@ -1,23 +1,28 @@
+import Html.App as Html
 import Char
 import Color
-import Graphics.Element exposing (..)
-import Graphics.Collage exposing (..)
-import Signal
+import Element exposing (..)
+import Collage exposing (..)
+import Text exposing (..)
+import AnimationFrame
 import Window
-import Keyboard
+import Keyboard exposing (KeyCode)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import String
-import Time
+import Time exposing (Time)
 import Random
 import List
-
+import Key exposing (..)
 
 type alias Radians = Float
 
 type GameState = PreRunning | Running | Won | Lost
-type KeyInput = ArrowInput {x: Int, y: Int} | SpaceInput Bool
 
+type alias KeyArrows = 
+  { x: Float
+  , y: Bool
+  }
 
 type alias Ship =
   { x: Float
@@ -27,6 +32,7 @@ type alias Ship =
   , roll: Radians
   , boosting: Bool
   , fuel: Float
+  , controls: KeyArrows
   }
 
 type alias Game =
@@ -38,7 +44,7 @@ type alias Game =
 
 makeGame : Game
 makeGame = { gravity = 0.000078
-           , ship = (Ship 0.1 0.6 0 0 0 False 1000)
+           , ship = (Ship 0.1 0.6 0 0 0 False 1000 {x=0, y=False})
            , state = PreRunning
            , platformPos = 0.5
            }
@@ -49,78 +55,189 @@ speedCutoff = 0.002
 rollCutoff : Float
 rollCutoff = 0.19
 
-main : Signal Element
-main =
-  Signal.map2 paint model Window.dimensions
-
-spacePressed : Signal Bool
-spacePressed = Keyboard.isDown (Char.toCode ' ')
-
-keyInput : Signal KeyInput
-keyInput = Signal.merge
-  (Signal.map ArrowInput Keyboard.arrows)
-  (Signal.map SpaceInput spacePressed)
-
-model : Signal Game
-model = Signal.foldp update makeGame (Signal.sampleOn (Time.fps 30) keyInput)
 
 
-update : KeyInput -> Game -> Game
-update input game =
+-------------------------------------------------------------------
+main =  
+  Html.program
+    { init = init
+    , update = update
+    , view = paint
+    , subscriptions = subscriptions
+    }
+-------------------------------------------------------------------
+
+subscriptions : Game -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ AnimationFrame.diffs TimeUpdate
+        , Keyboard.downs KeyDown
+        , Keyboard.ups KeyUp
+        ]
+
+
+-- signals
+-- main : Signal Element
+-- main =
+--   Signal.map2 paint model Window.dimensions
+
+-- spacePressed : Signal Bool
+-- spacePressed = Keyboard.isDown (Char.toCode ' ')
+
+-- keyInput : Signal KeyInput
+-- keyInput = Signal.merge
+--   (Signal.map ArrowInput Keyboard.arrows)
+--   (Signal.map SpaceInput spacePressed)
+
+-- model : Signal Game
+-- model = Signal.foldp update makeGame (Signal.sampleOn (Time.fps 30) keyInput)
+-- signals
+
+
+init : ( Game, Cmd Msg )
+init =
+    ( makeGame, Cmd.none )
+
+type Msg
+    = TimeUpdate Time
+    | KeyDown KeyCode
+    | KeyUp KeyCode
+
+update : Msg -> Game -> ( Game, Cmd Msg )
+update msg game =
   case game.state of
-    PreRunning -> case input of
-      SpaceInput True -> { game | state = Running }
-      _               -> game
-    Running -> case input of
-      ArrowInput arrows -> updateRunning arrows game
-      _                 -> updateRunning {x=0, y=0} game
-    Lost -> case input of
-      SpaceInput True -> { makeGame | state = Running }
-      _               -> game
-    Won -> case input of
-      SpaceInput True -> { makeGame | state = Running }
-      _               -> game
+    PreRunning -> case msg of
+          KeyDown keyCode -> ( keyDownPreRunning keyCode game, Cmd.none )
+          _               -> (game, Cmd.none) 
+    Running -> case msg of
+          TimeUpdate dt   -> ( updateRunning game, Cmd.none )
+          KeyDown keyCode -> ( keyDownRunning keyCode game, Cmd.none )
+          KeyUp keyCode   -> ( keyUpRunning keyCode game, Cmd.none )            
+    Lost -> case msg of
+          KeyDown keyCode -> ( keyDownIdle keyCode game, Cmd.none )
+    Won -> case msg of
+          KeyDown keyCode -> ( keyDownIdle keyCode game, Cmd.none )
+
+
+
+keyDownPreRunning : KeyCode -> Game -> Game
+keyDownPreRunning keyCode game =
+    case Key.fromCode keyCode of
+        Space ->
+            { game | state = Running }
+        _ ->
+            game
+
+
+keyDownIdle : KeyCode -> Game -> Game
+keyDownIdle keyCode game =
+    case Key.fromCode keyCode of
+        Space ->
+            { makeGame | state = Running }
+        _ ->
+            game
+
+keyDownRunning : KeyCode -> Game -> Game
+keyDownRunning keyCode game =
+    case Key.fromCode keyCode of
+        ArrowLeft ->
+            let 
+              controls = game.ship.controls
+              newControls = {controls | x = -1.0}
+              ship = game.ship
+              newShip =  {ship | controls = newControls}
+            in
+              { game | ship = newShip }
+        ArrowRight ->
+            let 
+              controls = game.ship.controls
+              newControls = {controls | x = 1.0}
+              ship = game.ship
+              newShip =  {ship | controls = newControls}
+            in
+              { game | ship = newShip }
+        ArrowUp ->
+            let 
+              controls = game.ship.controls
+              newControls = {controls | y = True}
+              ship = game.ship
+              newShip =  {ship | controls = newControls}
+            in
+              { game | ship = newShip }
+        _ ->
+            game
+
+keyUpRunning : KeyCode -> Game -> Game
+keyUpRunning keyCode game =
+    case Key.fromCode keyCode of
+        ArrowLeft ->
+            let 
+              controls = game.ship.controls
+              newControls = {controls | x = 0.0}
+              ship = game.ship
+              newShip =  {ship | controls = newControls}
+            in
+              { game | ship = newShip }
+        ArrowRight ->
+            let 
+              controls = game.ship.controls
+              newControls = {controls | x = 0.0}
+              ship = game.ship
+              newShip =  {ship | controls = newControls}
+            in
+              { game | ship = newShip }
+        ArrowUp ->
+            let 
+              controls = game.ship.controls
+              newControls = {controls | y = False}
+              ship = game.ship
+              newShip =  {ship | controls = newControls}
+            in
+              { game | ship = newShip }
+        _ ->
+            game
 
 
 genericScreen : String -> String -> Element
-genericScreen borderColor heading =
-  toElement 400 300 <|
-  div [ style [("background", "#eee")
-              , ("box-shadow", "5px 5px 0px 0px #888")
-              , ("padding", "10px")
-              , ("border", "2px solid")
-              , ("border-color", borderColor)
-              ]]
-  [ h2 [style [("margin", "0")]] [Html.text heading]
-  , p [] [Html.text "Land gently on the red platform before running out of fuel."]
-  , p [] [Html.text "Use < and > to roll the ship, ^ to boost."]
-  , p [] [Html.text "Press SPACE to start."]
-  ]
+genericScreen borderColor heading = leftAligned (fromString heading)
+  -- toElement 400 300 <|
+  -- div [ style [("background", "#eee")
+  --             , ("box-shadow", "5px 5px 0px 0px #888")
+  --             , ("padding", "10px")
+  --             , ("border", "2px solid")
+  --             , ("border-color", borderColor)
+  --             ]]
+  -- [ h2 [style [("margin", "0")]] [Html.text heading]
+  -- , p [] [Html.text "Land gently on the red platform before running out of fuel."]
+  -- , p [] [Html.text "Use < and > to roll the ship, ^ to boost."]
+  -- , p [] [Html.text "Press SPACE to start."]
+  -- ]
 
 startScreen = genericScreen "#eee" "Rocket lander in Elm."
 lostScreen = genericScreen "#a00" "Ouch!"
 wonScreen = genericScreen "#0a0" "Good job, commander."
 
 statsScreen : (Int, Int) -> Game -> Element
-statsScreen (w, h) game =
-  let
-    speedColor = ("color", if shipSpeed game.ship < speedCutoff then "#0a0" else "#f00")
-    rollColor = ("color", if abs(game.ship.roll) < rollCutoff then "#0a0" else "#f00")
-  in
-  container w h topRight <| toElement 200 100 <|
-  div [style [("font-family", "monospace"), ("color", "#fff")]]
-  [ p [] [ Html.text ("Fuel: " ++ toString game.ship.fuel) ]
-  , p [style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed game.ship))) ]
-  , p [style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (game.ship.roll))) ]
-  ]
+statsScreen (w, h) game =leftAligned (fromString "stats...")
+--   let
+--     speedColor = ("color", if shipSpeed game.ship < speedCutoff then "#0a0" else "#f00")
+--     rollColor = ("color", if abs(game.ship.roll) < rollCutoff then "#0a0" else "#f00")
+--   in
+--   container w h topRight <| toElement 200 100 <|
+--   div [style [("font-family", "monospace"), ("color", "#fff")]]
+--   [ p [] [ Html.text ("Fuel: " ++ toString game.ship.fuel) ]
+--   , p [style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed game.ship))) ]
+--   , p [style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (game.ship.roll))) ]
+--   ]
 
-updateRunning : {x: Int, y: Int} -> Game -> Game
-updateRunning arrows game =
+updateRunning : Game -> Game
+updateRunning game =
   let
+    controls = game.ship.controls
     ship = shipUpdate
            game.gravity
-           (if game.ship.fuel > 0 then arrows.y == 1 else False)
-           (if game.ship.fuel > 0 then arrows.x else 0)
+           (if game.ship.fuel > 0 then controls.y else False)
+           (if game.ship.fuel > 0 then round controls.x else 0)
            game.ship
     (platformPos, landscape) = generateLandscape
   in
@@ -129,6 +246,7 @@ updateRunning arrows game =
       (True, True)   -> {game | state = Won}
       (False, True)  -> {game | state = Lost}
       (False, False) -> {game | state = Lost}
+
 
 
 shipUpdate : Float -> Bool -> Int -> Ship -> Ship
