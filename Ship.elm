@@ -15,7 +15,7 @@ import Random
 import List
 import Key exposing (..)
 import Graphics.Render as Render
-
+import Task
 
 type alias Radians = Float
 
@@ -51,8 +51,8 @@ makeGame = { gravity = 0.000078
            , ship = (Ship 0.9 0.4 0 0 0 False 1000 {x=0, y=False})
            , state = PreRunning
            , platformPos = 0.5
-           , height = 440
-           , width = 640
+           , height = 800
+           , width = 1600
            }
 
 speedCutoff : Float
@@ -79,40 +79,49 @@ subscriptions model =
         [ AnimationFrame.diffs TimeUpdate
         , Keyboard.downs KeyDown
         , Keyboard.ups KeyUp
-        , Window.resizes (\{height, width} -> Resize height width)
+        , Window.resizes (\{width, height} -> Resize width height)
         ]
 
 init : ( Game, Cmd Msg )
 init =
-    ( makeGame, Cmd.none )
+    ( makeGame, initialSizeCmd )
+
+initialSizeCmd : Cmd Msg
+initialSizeCmd =
+  Task.perform (\_ -> NoOp) sizeToMsg Window.size
+
+sizeToMsg : Window.Size -> Msg
+sizeToMsg size =
+  Resize size.width size.height
 
 type Msg
     = TimeUpdate Time
     | KeyDown KeyCode
     | KeyUp KeyCode
     | Resize Int Int
+    | NoOp
 
 update : Msg -> Game -> ( Game, Cmd Msg )
 update msg game =
   case game.state of
     PreRunning -> case msg of
           KeyDown keyCode -> ( keyDownPreRunning keyCode game, Cmd.none )
-          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
+          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
           _               -> (game, Cmd.none) 
     Running -> case msg of
           TimeUpdate dt   -> ( updateRunning game, Cmd.none )
           KeyDown keyCode -> ( keyDownRunning keyCode game, Cmd.none )
           KeyUp keyCode   -> ( keyUpRunning keyCode game, Cmd.none )            
-          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
+          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
+          NoOp -> (game, Cmd.none)      
     Lost -> case msg of
-          KeyDown keyCode -> ( keyDownIdle keyCode game, Cmd.none )
-          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
+          KeyDown keyCode -> ( keyDownIdle keyCode game, initialSizeCmd )
+          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
           _               -> (game, Cmd.none) 
     Won -> case msg of
-          KeyDown keyCode -> ( keyDownIdle keyCode game, Cmd.none )
-          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
+          KeyDown keyCode -> ( keyDownIdle keyCode game, initialSizeCmd )
+          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
           _               -> (game, Cmd.none) 
-
 
 
 keyDownPreRunning : KeyCode -> Game -> Game
@@ -226,7 +235,7 @@ shipUpdate g boosting roll ship =
            , x = ship.x + ship.vx
            , boosting = boosting
            , fuel = fuel''
-           , roll = ship.roll - ( (toFloat roll) / 20.0)
+           , roll = ship.roll + ( (toFloat roll) / 20.0)
            }
 
 shipSpeed : Ship -> Float
@@ -234,7 +243,7 @@ shipSpeed ship = clamp 0.0 1.0 (sqrt (ship.vx * ship.vx + ship.vy * ship.vy))
 
 isShipLanded : Ship -> Float -> Bool
 isShipLanded ship platformPos =
-  abs ship.y < 0.01
+  abs ship.y > 0.99
     && abs (ship.x - platformPos) < 0.1
     && shipSpeed ship < speedCutoff
     && abs ship.roll < rollCutoff
@@ -242,7 +251,7 @@ isShipLanded ship platformPos =
 {- check whether the ship is below a list of half-planes -}
 isShipAlive : (Float, Float) -> List (Float, Float) -> Bool
 isShipAlive (sx, sy) landscape =
-  let hits = List.foldl (isHit (sx, sy)) (False, (0, 0)) landscape
+  let hits = List.foldl (isHit (sx, sy)) (False, (1, 1)) landscape
   in
     fst hits
 
@@ -254,7 +263,11 @@ isHit (shipX, shipY) (newX, newY) (hitSoFar, (prevX, prevY)) =
       sy = shipY - prevY  {- urg give me some vector maths .. -}
   in
     {- half plane intersection -}
-    (hitSoFar || (nx * sx + ny * sy < 0 && shipX >= prevX && shipX < newX), (newX, newY))
+    (hitSoFar || 
+    (nx * sx + ny * sy < 0   
+    && shipX < prevX 
+    && shipX > newX), 
+    (newX, newY))
 
 toScreenCoords : (Int, Int) -> (Float, Float) -> (Float, Float)
 toScreenCoords (w, h) (x, y)=
@@ -267,7 +280,7 @@ toScreenCoords (w, h) (x, y)=
 paint : Game -> Html Msg
 paint game =
   let 
-    (w', h') = (game.width, game.height)
+    (w', h') = (game.width - 10, game.height - 10)
     (w, h) = (toFloat w', toFloat h')  in
     case game.state of
       PreRunning -> Render.svg w h 
@@ -295,7 +308,7 @@ paintGame game (w, h) =
   let fw = toFloat w
       fh = toFloat h
   in
-  Render.group --w h
+  Render.group
   [ Render.solidFill Color.black(Render.rectangle fw fh)
   , paintLandscape generateLandscape (w, h)
   , paintPlatform game.platformPos (w, h)
@@ -310,8 +323,10 @@ paintShip ship (w, h) =
     screenCoords = (toScreenCoords (w, h) (ship.x, ship.y))
   in
   Render.rotate (ship.roll) <|
+  Render.rotate (pi) <|
   Render.move 0 -20 <| {- Paint a bit higher so it looks like the ship dies on contact, not when deep in the land -}
-  Render.move (fst screenCoords) (snd screenCoords)<|
+  Render.move (fst screenCoords) (snd screenCoords) <|
+  Render.move -10 0 <|
   Render.solidFill color (Render.polygon [(0, 0), (10, -10), (10, -20), (-10, -20), (-10, -10)])
 
 paintLandscape : (Float, List (Float, Float)) -> (Int, Int) -> Render.Form Msg
