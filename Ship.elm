@@ -1,9 +1,5 @@
 import Html.App as Html
-import Char
 import Color
--- import Element exposing (..)
--- import Collage exposing (..)
-import Text exposing (..)
 import AnimationFrame
 import Window
 import Keyboard exposing (KeyCode)
@@ -37,7 +33,7 @@ type alias Ship =
   , controls: KeyArrows
   }
 
-type alias Game =
+type alias Model =
   { gravity: Float
   , ship: Ship
   , state: GameState
@@ -46,7 +42,7 @@ type alias Game =
   , width: Int
   }
 
-makeGame : Game
+makeGame : Model
 makeGame = { gravity = 0.000078
            , ship = (Ship 0.9 0.4 0 0 0 False 1000 {x=0, y=False})
            , state = PreRunning
@@ -73,7 +69,7 @@ main =
     }
 -------------------------------------------------------------------
 
-subscriptions : Game -> Sub Msg
+subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ AnimationFrame.diffs TimeUpdate
@@ -82,7 +78,7 @@ subscriptions model =
         , Window.resizes (\{width, height} -> Resize width height)
         ]
 
-init : ( Game, Cmd Msg )
+init : ( Model, Cmd Msg )
 init =
     ( makeGame, initialSizeCmd )
 
@@ -101,122 +97,122 @@ type Msg
     | Resize Int Int
     | NoOp
 
-update : Msg -> Game -> ( Game, Cmd Msg )
-update msg game =
-  case game.state of
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+  case model.state of
     PreRunning -> case msg of
-          KeyDown keyCode -> ( keyDownPreRunning keyCode game, Cmd.none )
-          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
-          _               -> (game, Cmd.none) 
+          KeyDown keyCode -> ( keyDownPreRunning keyCode model, Cmd.none )
+          Resize w h      -> ({model | height = h, width = w} , Cmd.none)
+          _               -> (model, Cmd.none) 
     Running -> case msg of
-          TimeUpdate dt   -> ( updateRunning game, Cmd.none )
-          KeyDown keyCode -> ( keyDownRunning keyCode game, Cmd.none )
-          KeyUp keyCode   -> ( keyUpRunning keyCode game, Cmd.none )            
-          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
-          NoOp -> (game, Cmd.none)      
+          TimeUpdate dt   -> ( updateRunning model, Cmd.none )
+          KeyDown keyCode -> ( keyDownRunning keyCode model, Cmd.none )
+          KeyUp keyCode   -> ( keyUpRunning keyCode model, Cmd.none )            
+          Resize w h      -> ({model | height = h, width = w} , Cmd.none)
+          NoOp -> (model, Cmd.none)      
     Lost -> case msg of
-          KeyDown keyCode -> ( keyDownIdle keyCode game, initialSizeCmd )
-          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
-          _               -> (game, Cmd.none) 
+          KeyDown keyCode -> ( keyDownIdle keyCode model, initialSizeCmd )
+          Resize w h      -> ({model | height = h, width = w} , Cmd.none)
+          _               -> (model, Cmd.none) 
     Won -> case msg of
-          KeyDown keyCode -> ( keyDownIdle keyCode game, initialSizeCmd )
-          Resize w h      -> ({game | height = h, width = w} , Cmd.none)
-          _               -> (game, Cmd.none) 
+          KeyDown keyCode -> ( keyDownIdle keyCode model, initialSizeCmd )
+          Resize w h      -> ({model | height = h, width = w} , Cmd.none)
+          _               -> (model, Cmd.none) 
 
 
-keyDownPreRunning : KeyCode -> Game -> Game
-keyDownPreRunning keyCode game =
+keyDownPreRunning : KeyCode -> Model -> Model
+keyDownPreRunning keyCode model =
     case Key.fromCode keyCode of
         Space ->
-            { game | state = Running }
+            { model | state = Running }
         _ ->
-            game
+            model
 
 
-keyDownIdle : KeyCode -> Game -> Game
-keyDownIdle keyCode game =
+keyDownIdle : KeyCode -> Model -> Model
+keyDownIdle keyCode model =
     case Key.fromCode keyCode of
         Space ->
             { makeGame | state = Running }
         _ ->
-            game
+            model
 
-keyDownRunning : KeyCode -> Game -> Game
-keyDownRunning keyCode game =
+keyDownRunning : KeyCode -> Model -> Model
+keyDownRunning keyCode model =
     case Key.fromCode keyCode of
         ArrowLeft ->
             let 
-              controls = game.ship.controls
+              controls = model.ship.controls
               newControls = {controls | x = -1.0}
-              ship = game.ship
+              ship = model.ship
               newShip =  {ship | controls = newControls}
             in
-              { game | ship = newShip }
+              { model | ship = newShip }
         ArrowRight ->
             let 
-              controls = game.ship.controls
+              controls = model.ship.controls
               newControls = {controls | x = 1.0}
-              ship = game.ship
+              ship = model.ship
               newShip =  {ship | controls = newControls}
             in
-              { game | ship = newShip }
+              { model | ship = newShip }
         ArrowUp ->
             let 
-              controls = game.ship.controls
+              controls = model.ship.controls
               newControls = {controls | y = True}
-              ship = game.ship
+              ship = model.ship
               newShip =  {ship | controls = newControls}
             in
-              { game | ship = newShip }
+              { model | ship = newShip }
         _ ->
-            game
+            model
 
-keyUpRunning : KeyCode -> Game -> Game
-keyUpRunning keyCode game =
+keyUpRunning : KeyCode -> Model -> Model
+keyUpRunning keyCode model =
     case Key.fromCode keyCode of
         ArrowLeft ->
             let 
-              controls = game.ship.controls
+              controls = model.ship.controls
               newControls = {controls | x = 0.0}
-              ship = game.ship
+              ship = model.ship
               newShip =  {ship | controls = newControls}
             in
-              { game | ship = newShip }
+              { model | ship = newShip }
         ArrowRight ->
             let 
-              controls = game.ship.controls
+              controls = model.ship.controls
               newControls = {controls | x = 0.0}
-              ship = game.ship
+              ship = model.ship
               newShip =  {ship | controls = newControls}
             in
-              { game | ship = newShip }
+              { model | ship = newShip }
         ArrowUp ->
             let 
-              controls = game.ship.controls
+              controls = model.ship.controls
               newControls = {controls | y = False}
-              ship = game.ship
+              ship = model.ship
               newShip =  {ship | controls = newControls}
             in
-              { game | ship = newShip }
+              { model | ship = newShip }
         _ ->
-            game
+            model
 
-updateRunning : Game -> Game
-updateRunning game =
+updateRunning : Model -> Model
+updateRunning model =
   let
-    controls = game.ship.controls
+    controls = model.ship.controls
     ship = shipUpdate
-           game.gravity
-           (if game.ship.fuel > 0 then controls.y else False)
-           (if game.ship.fuel > 0 then round controls.x else 0)
-           game.ship
+           model.gravity
+           (if model.ship.fuel > 0 then controls.y else False)
+           (if model.ship.fuel > 0 then round controls.x else 0)
+           model.ship
     (platformPos, landscape) = generateLandscape
   in
     case (isShipAlive (ship.x, ship.y) landscape, isShipLanded ship platformPos) of
-      (True, False)  -> {game | ship = ship}
-      (True, True)   -> {game | state = Won}
-      (False, True)  -> {game | state = Lost}
-      (False, False) -> {game | state = Lost}
+      (True, False)  -> {model | ship = ship}
+      (True, True)   -> {model | state = Won}
+      (False, True)  -> {model | state = Lost}
+      (False, False) -> {model | state = Lost}
 
 
 
@@ -277,43 +273,43 @@ toScreenCoords (w, h) (x, y)=
 -- VIEW
 ------------------------------------
 
-paint : Game -> Html Msg
-paint game =
+paint : Model -> Html Msg
+paint model =
   let 
-    (w', h') = (game.width - 10, game.height - 10)
+    (w', h') = (model.width - 10, model.height - 10)
     (w, h) = (toFloat w', toFloat h')  in
-    case game.state of
+    case model.state of
       PreRunning -> Render.svg w h 
         (Render.group
-        [ paintGame game (w', h')
+        [ paintGame model (w', h')
         , Render.move -200 -100 <| Render.html startScreen
         ])
       Running -> Render.svg w h 
         (Render.group
-        [ paintGame game (w', h')])
+        [ paintGame model (w', h')])
       Lost -> Render.svg w h
         (Render.group
-        [ paintGame game (w', h')
+        [ paintGame model (w', h')
         , Render.move -200 -100 <| Render.html lostScreen
         ])
       Won -> Render.svg w h
         (Render.group
-        [ paintGame game (w', h')
+        [ paintGame model (w', h')
         , Render.move -200 -100 <| Render.html wonScreen
         ])
 
 
-paintGame : Game -> (Int, Int) -> Render.Form Msg
-paintGame game (w, h) =
+paintGame : Model -> (Int, Int) -> Render.Form Msg
+paintGame model (w, h) =
   let fw = toFloat w
       fh = toFloat h
   in
   Render.group
   [ Render.solidFill Color.black(Render.rectangle fw fh)
   , paintLandscape generateLandscape (w, h)
-  , paintPlatform game.platformPos (w, h)
-  , paintShip game.ship (w, h)
-  , Render.move 260 -(toFloat h / 2) <| Render.html <| (statsScreen (w, h) game)
+  , paintPlatform model.platformPos (w, h)
+  , paintShip model.ship (w, h)
+  , Render.move (fw/2 - 200) -(toFloat h / 2) <| Render.html <| (statsScreen (w, h) model)
   ]
 
 paintShip : Ship -> (Int, Int) -> Render.Form Msg
@@ -349,7 +345,6 @@ paintPlatform platformPos (w, h) =
 
 genericScreen : String -> String -> Html Msg
 genericScreen borderColor heading = 
-  -- toElement 400 300 <|
   div [ Html.Attributes.style [("background", "#eee")
               , ("box-shadow", "5px 5px 0px 0px #888")
               , ("padding", "10px")
@@ -363,21 +358,23 @@ genericScreen borderColor heading =
   , p [] [Html.text "Press SPACE to start."]
   ]
 
+startScreen: Html Msg
 startScreen = genericScreen "#eee" "Rocket lander in Elm."
+lostScreen: Html Msg
 lostScreen = genericScreen "#a00" "Ouch!"
+wonScreen: Html Msg
 wonScreen = genericScreen "#0a0" "Good job, commander."
 
-statsScreen : (Int, Int) -> Game -> Html Msg
-statsScreen (w, h) game = 
+statsScreen : (Int, Int) -> Model -> Html Msg
+statsScreen (w, h) model = 
   let
-    speedColor = ("color", if shipSpeed game.ship < speedCutoff then "#0a0" else "#f00")
-    rollColor = ("color", if abs(game.ship.roll) < rollCutoff then "#0a0" else "#f00")
+    speedColor = ("color", if shipSpeed model.ship < speedCutoff then "#0a0" else "#f00")
+    rollColor = ("color", if abs(model.ship.roll) < rollCutoff then "#0a0" else "#f00")
   in
-  -- container w h topRight <| toElement 200 100 <|
-  div [Html.Attributes.style [("font-family", "monospace"), ("color", "#fff")]]
-  [ p [] [ Html.text ("Fuel: " ++ toString game.ship.fuel) ]
-  , p [Html.Attributes.style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed game.ship))) ]
-  , p [Html.Attributes.style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (game.ship.roll))) ]
+  div [Html.Attributes.style [("font-family", "monospace"), ("color", "#fff"), ("width", "200px")]]
+  [ p [] [ Html.text ("Fuel: " ++ toString model.ship.fuel) ]
+  , p [Html.Attributes.style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed model.ship))) ]
+  , p [Html.Attributes.style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (model.ship.roll))) ]
   ]
 
 
