@@ -1,8 +1,8 @@
 import Html.App as Html
 import Char
 import Color
-import Element exposing (..)
-import Collage exposing (..)
+-- import Element exposing (..)
+-- import Collage exposing (..)
 import Text exposing (..)
 import AnimationFrame
 import Window
@@ -14,6 +14,8 @@ import Time exposing (Time)
 import Random
 import List
 import Key exposing (..)
+import Graphics.Render as Render
+
 
 type alias Radians = Float
 
@@ -40,13 +42,17 @@ type alias Game =
   , ship: Ship
   , state: GameState
   , platformPos: Float
+  , height: Int
+  , width: Int
   }
 
 makeGame : Game
 makeGame = { gravity = 0.000078
-           , ship = (Ship 0.1 0.6 0 0 0 False 1000 {x=0, y=False})
+           , ship = (Ship 0.9 0.4 0 0 0 False 1000 {x=0, y=False})
            , state = PreRunning
            , platformPos = 0.5
+           , height = 440
+           , width = 640
            }
 
 speedCutoff : Float
@@ -73,26 +79,8 @@ subscriptions model =
         [ AnimationFrame.diffs TimeUpdate
         , Keyboard.downs KeyDown
         , Keyboard.ups KeyUp
+        , Window.resizes (\{height, width} -> Resize height width)
         ]
-
-
--- signals
--- main : Signal Element
--- main =
---   Signal.map2 paint model Window.dimensions
-
--- spacePressed : Signal Bool
--- spacePressed = Keyboard.isDown (Char.toCode ' ')
-
--- keyInput : Signal KeyInput
--- keyInput = Signal.merge
---   (Signal.map ArrowInput Keyboard.arrows)
---   (Signal.map SpaceInput spacePressed)
-
--- model : Signal Game
--- model = Signal.foldp update makeGame (Signal.sampleOn (Time.fps 30) keyInput)
--- signals
-
 
 init : ( Game, Cmd Msg )
 init =
@@ -102,21 +90,28 @@ type Msg
     = TimeUpdate Time
     | KeyDown KeyCode
     | KeyUp KeyCode
+    | Resize Int Int
 
 update : Msg -> Game -> ( Game, Cmd Msg )
 update msg game =
   case game.state of
     PreRunning -> case msg of
           KeyDown keyCode -> ( keyDownPreRunning keyCode game, Cmd.none )
+          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
           _               -> (game, Cmd.none) 
     Running -> case msg of
           TimeUpdate dt   -> ( updateRunning game, Cmd.none )
           KeyDown keyCode -> ( keyDownRunning keyCode game, Cmd.none )
           KeyUp keyCode   -> ( keyUpRunning keyCode game, Cmd.none )            
+          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
     Lost -> case msg of
           KeyDown keyCode -> ( keyDownIdle keyCode game, Cmd.none )
+          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
+          _               -> (game, Cmd.none) 
     Won -> case msg of
           KeyDown keyCode -> ( keyDownIdle keyCode game, Cmd.none )
+          Resize h w      -> ({game | height = h, width = w} , Cmd.none)
+          _               -> (game, Cmd.none) 
 
 
 
@@ -197,39 +192,6 @@ keyUpRunning keyCode game =
         _ ->
             game
 
-
-genericScreen : String -> String -> Element
-genericScreen borderColor heading = leftAligned (fromString heading)
-  -- toElement 400 300 <|
-  -- div [ style [("background", "#eee")
-  --             , ("box-shadow", "5px 5px 0px 0px #888")
-  --             , ("padding", "10px")
-  --             , ("border", "2px solid")
-  --             , ("border-color", borderColor)
-  --             ]]
-  -- [ h2 [style [("margin", "0")]] [Html.text heading]
-  -- , p [] [Html.text "Land gently on the red platform before running out of fuel."]
-  -- , p [] [Html.text "Use < and > to roll the ship, ^ to boost."]
-  -- , p [] [Html.text "Press SPACE to start."]
-  -- ]
-
-startScreen = genericScreen "#eee" "Rocket lander in Elm."
-lostScreen = genericScreen "#a00" "Ouch!"
-wonScreen = genericScreen "#0a0" "Good job, commander."
-
-statsScreen : (Int, Int) -> Game -> Element
-statsScreen (w, h) game =leftAligned (fromString "stats...")
---   let
---     speedColor = ("color", if shipSpeed game.ship < speedCutoff then "#0a0" else "#f00")
---     rollColor = ("color", if abs(game.ship.roll) < rollCutoff then "#0a0" else "#f00")
---   in
---   container w h topRight <| toElement 200 100 <|
---   div [style [("font-family", "monospace"), ("color", "#fff")]]
---   [ p [] [ Html.text ("Fuel: " ++ toString game.ship.fuel) ]
---   , p [style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed game.ship))) ]
---   , p [style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (game.ship.roll))) ]
---   ]
-
 updateRunning : Game -> Game
 updateRunning game =
   let
@@ -258,31 +220,14 @@ shipUpdate g boosting roll ship =
     fuel' = if boosting then ship.fuel - 3 else ship.fuel
     fuel'' = if abs roll > 0 then fuel' - 1 else fuel'
   in
-    { ship | vy = ship.vy - g + accell.y
-           , vx = ship.vx + accell.x
+    { ship | vy = ship.vy + g - accell.y
+           , vx = ship.vx - accell.x
            , y = ship.y + ship.vy
            , x = ship.x + ship.vx
            , boosting = boosting
            , fuel = fuel''
            , roll = ship.roll - ( (toFloat roll) / 20.0)
            }
-
-paint : Game -> (Int, Int) -> Element
-paint game (w, h) =
-  case game.state of
-    PreRunning -> collage w h
-      [ toForm (paintGame game (w, h))
-      , toForm startScreen
-      ]
-    Running -> paintGame game (w, h)
-    Lost -> collage w h
-      [ toForm (paintGame game (w, h))
-      , toForm lostScreen
-      ]
-    Won -> collage w h
-      [ toForm (paintGame game (w, h))
-      , toForm wonScreen
-      ]
 
 shipSpeed : Ship -> Float
 shipSpeed ship = clamp 0.0 1.0 (sqrt (ship.vx * ship.vx + ship.vy * ship.vy))
@@ -315,42 +260,111 @@ toScreenCoords : (Int, Int) -> (Float, Float) -> (Float, Float)
 toScreenCoords (w, h) (x, y)=
   ((x - 0.5) * (toFloat w), (y - 0.5) * (toFloat h))
 
-paintGame : Game -> (Int, Int) -> Element
+------------------------------------
+-- VIEW
+------------------------------------
+
+paint : Game -> Html Msg
+paint game =
+  let 
+    (w', h') = (game.width, game.height)
+    (w, h) = (toFloat w', toFloat h')  in
+    case game.state of
+      PreRunning -> Render.svg w h 
+        (Render.group
+        [ paintGame game (w', h')
+        , Render.move -200 -100 <| Render.html startScreen
+        ])
+      Running -> Render.svg w h 
+        (Render.group
+        [ paintGame game (w', h')])
+      Lost -> Render.svg w h
+        (Render.group
+        [ paintGame game (w', h')
+        , Render.move -200 -100 <| Render.html lostScreen
+        ])
+      Won -> Render.svg w h
+        (Render.group
+        [ paintGame game (w', h')
+        , Render.move -200 -100 <| Render.html wonScreen
+        ])
+
+
+paintGame : Game -> (Int, Int) -> Render.Form Msg
 paintGame game (w, h) =
   let fw = toFloat w
       fh = toFloat h
   in
-  collage w h
-  [ filled Color.black(rect fw fh)
+  Render.group --w h
+  [ Render.solidFill Color.black(Render.rectangle fw fh)
   , paintLandscape generateLandscape (w, h)
   , paintPlatform game.platformPos (w, h)
   , paintShip game.ship (w, h)
-  , toForm (statsScreen (w, h) game)
+  , Render.move 260 -(toFloat h / 2) <| Render.html <| (statsScreen (w, h) game)
   ]
 
-paintShip : Ship -> (Int, Int) -> Form
+paintShip : Ship -> (Int, Int) -> Render.Form Msg
 paintShip ship (w, h) =
   let
     color = Color.rgba 255 0 0 255
+    screenCoords = (toScreenCoords (w, h) (ship.x, ship.y))
   in
-  rotate (ship.roll) <|
-  move (0, 20) <| {- Paint a bit higher so it looks like the ship dies on contact, not when deep in the land -}
-  move (toScreenCoords (w, h) (ship.x, ship.y)) <|
-  filled color (polygon [(0, 0), (10, -10), (10, -20), (-10, -20), (-10, -10)])
+  Render.rotate (ship.roll) <|
+  Render.move 0 -20 <| {- Paint a bit higher so it looks like the ship dies on contact, not when deep in the land -}
+  Render.move (fst screenCoords) (snd screenCoords)<|
+  Render.solidFill color (Render.polygon [(0, 0), (10, -10), (10, -20), (-10, -20), (-10, -10)])
 
-paintLandscape : (Float, List (Float, Float)) -> (Int, Int) -> Form
+paintLandscape : (Float, List (Float, Float)) -> (Int, Int) -> Render.Form Msg
 paintLandscape (platformPos, heights) (w, h) =
-  let closedLoop = heights ++ [(1.0, 0.0), (0.0, 0.0)]
+  let closedLoop = heights ++ [(0.0, 1.0), (1.0, 1.0)]
   in
-  filled (Color.rgba 0 255 0 255)
-    (polygon (List.map  (toScreenCoords (w, h)) closedLoop))
+  Render.solidFill (Color.rgba 0 255 0 255)
+    (Render.polygon (List.map  (toScreenCoords (w, h)) closedLoop))
 
-paintPlatform : Float -> (Int, Int) -> Form
+paintPlatform : Float -> (Int, Int) -> Render.Form Msg
 paintPlatform platformPos (w, h) =
-  let pos = (toFloat w) * (platformPos - 0.5)
+  let 
+    xpos = (toFloat w) * (platformPos - 0.5)
+    ypos = (toFloat h / 2) - 5
   in
-    move (pos, -(toFloat h / 2) + 5) <|
-    filled (Color.rgba 255 0 0 255) (rect 80 10)
+    Render.move xpos ypos <|
+    Render.solidFill (Color.rgba 255 0 0 255) (Render.rectangle 80 10)
+
+
+
+genericScreen : String -> String -> Html Msg
+genericScreen borderColor heading = 
+  -- toElement 400 300 <|
+  div [ Html.Attributes.style [("background", "#eee")
+              , ("box-shadow", "5px 5px 0px 0px #888")
+              , ("padding", "10px")
+              , ("width", "400px")
+              , ("border", "2px solid")
+              , ("border-color", borderColor)
+              ]]
+  [ h2 [Html.Attributes.style [("margin", "0")]] [Html.text heading]
+  , p [] [Html.text "Land gently on the red platform before running out of fuel."]
+  , p [] [Html.text "Use < and > to roll the ship, ^ to boost."]
+  , p [] [Html.text "Press SPACE to start."]
+  ]
+
+startScreen = genericScreen "#eee" "Rocket lander in Elm."
+lostScreen = genericScreen "#a00" "Ouch!"
+wonScreen = genericScreen "#0a0" "Good job, commander."
+
+statsScreen : (Int, Int) -> Game -> Html Msg
+statsScreen (w, h) game = 
+  let
+    speedColor = ("color", if shipSpeed game.ship < speedCutoff then "#0a0" else "#f00")
+    rollColor = ("color", if abs(game.ship.roll) < rollCutoff then "#0a0" else "#f00")
+  in
+  -- container w h topRight <| toElement 200 100 <|
+  div [Html.Attributes.style [("font-family", "monospace"), ("color", "#fff")]]
+  [ p [] [ Html.text ("Fuel: " ++ toString game.ship.fuel) ]
+  , p [Html.Attributes.style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed game.ship))) ]
+  , p [Html.Attributes.style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (game.ship.roll))) ]
+  ]
+
 
 {- Make a landscape with a platform position and some mountain-looking
    things -}
@@ -360,4 +374,4 @@ generateLandscape =
     platformIndex = Random.int 0 2
     mainValues = [Random.float 0.1 0.2, Random.float 0.4 0.5, Random.float 0.7 0.9]
   in
-   (0.5, [(0.0, 0.2), (0.2, 0.4), (0.3, 0.6), (0.4, 0.1), (0.48, 0.0), (0.5, 0.0), (0.52, 0.0), (0.6, 0.2), (0.8, 0.6), (1.0, 0.7)])
+   (0.5, [(1.0, 0.8), (0.8, 0.6), (0.7, 0.4), (0.6, 0.9), (0.52, 1.0), (0.5, 1.0), (0.48, 1.0), (0.4, 0.8), (0.2, 0.4), (0.0, 0.3)])
