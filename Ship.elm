@@ -4,7 +4,6 @@ import AnimationFrame
 import Window
 import Keyboard exposing (KeyCode)
 import Html exposing (..)
-import Html.Attributes exposing (..)
 import String
 import Time exposing (Time)
 import Random
@@ -16,6 +15,15 @@ import Task
 type alias Radians = Float
 
 type GameState = PreRunning | Running | Won | Lost
+
+type alias Model =
+  { gravity: Float
+  , ship: Ship
+  , state: GameState
+  , platformPos: Float
+  , height: Int
+  , width: Int
+  }
 
 type alias KeyArrows = 
   { x: Float
@@ -33,14 +41,6 @@ type alias Ship =
   , controls: KeyArrows
   }
 
-type alias Model =
-  { gravity: Float
-  , ship: Ship
-  , state: GameState
-  , platformPos: Float
-  , height: Int
-  , width: Int
-  }
 
 makeGame : Model
 makeGame = { gravity = 0.000078
@@ -57,9 +57,7 @@ speedCutoff = 0.002
 rollCutoff : Float
 rollCutoff = 0.19
 
-
-
--------------------------------------------------------------------
+main: Program Never
 main =  
   Html.program
     { init = init
@@ -67,7 +65,6 @@ main =
     , view = paint
     , subscriptions = subscriptions
     }
--------------------------------------------------------------------
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -96,6 +93,11 @@ type Msg
     | KeyUp KeyCode
     | Resize Int Int
     | NoOp
+
+
+------------------------------------
+-- Update
+------------------------------------
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -282,7 +284,7 @@ paint model =
       PreRunning -> Render.svg w h 
         (Render.group
         [ paintGame model (w', h')
-        , Render.move -200 -100 <| Render.html startScreen
+          , startScreen  
         ])
       Running -> Render.svg w h 
         (Render.group
@@ -290,12 +292,12 @@ paint model =
       Lost -> Render.svg w h
         (Render.group
         [ paintGame model (w', h')
-        , Render.move -200 -100 <| Render.html lostScreen
+        , lostScreen
         ])
       Won -> Render.svg w h
         (Render.group
         [ paintGame model (w', h')
-        , Render.move -200 -100 <| Render.html wonScreen
+        , wonScreen
         ])
 
 
@@ -309,7 +311,7 @@ paintGame model (w, h) =
   , paintLandscape generateLandscape (w, h)
   , paintPlatform model.platformPos (w, h)
   , paintShip model.ship (w, h)
-  , Render.move (fw/2 - 200) -(toFloat h / 2) <| Render.html <| (statsScreen (w, h) model)
+  , Render.move (fw/2 - 200) -(toFloat h / 2 - 20) <| (statsScreen (w, h) model)
   ]
 
 paintShip : Ship -> (Int, Int) -> Render.Form Msg
@@ -341,40 +343,37 @@ paintPlatform platformPos (w, h) =
     Render.move xpos ypos <|
     Render.solidFill (Color.rgba 255 0 0 255) (Render.rectangle 80 10)
 
-
-
-genericScreen : String -> String -> Html Msg
+genericScreen : Color.Color -> String -> Render.Form Msg
 genericScreen borderColor heading = 
-  div [ Html.Attributes.style [("background", "#eee")
-              , ("box-shadow", "5px 5px 0px 0px #888")
-              , ("padding", "10px")
-              , ("width", "400px")
-              , ("border", "2px solid")
-              , ("border-color", borderColor)
-              ]]
-  [ h2 [Html.Attributes.style [("margin", "0")]] [Html.text heading]
-  , p [] [Html.text "Land gently on the red platform before running out of fuel."]
-  , p [] [Html.text "Use < and > to roll the ship, ^ to boost."]
-  , p [] [Html.text "Press SPACE to start."]
+  let
+    width = 440
+    height = 150
+    offset = -( width / 2) + 5 
+  in
+  Render.group [  Render.solidFillWithBorder (Color.rgba 255 255 255 255) 2 borderColor (Render.rectangle width height)
+                , Render.move offset -30 <| Render.bold 20 "monospace" (Color.rgba 0 0 0 255) heading   
+                , Render.move offset 0 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Land gently on the red platform before running out of fuel."
+                , Render.move offset 18 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Use < and > to roll the ship, ^ to boost."
+                , Render.move offset 36 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Press SPACE to start."
   ]
 
-startScreen: Html Msg
-startScreen = genericScreen "#eee" "Rocket lander in Elm."
-lostScreen: Html Msg
-lostScreen = genericScreen "#a00" "Ouch!"
-wonScreen: Html Msg
-wonScreen = genericScreen "#0a0" "Good job, commander."
+startScreen: Render.Form Msg
+startScreen = genericScreen (Color.rgba 255 0 0 255) "Rocket lander in Elm."
+lostScreen: Render.Form Msg
+lostScreen = genericScreen (Color.rgba 170 0 0 255) "Ouch!"
+wonScreen: Render.Form Msg
+wonScreen = genericScreen (Color.rgba 0 170 0 255) "Good job, commander."
 
-statsScreen : (Int, Int) -> Model -> Html Msg
+statsScreen : (Int, Int) -> Model -> Render.Form Msg
 statsScreen (w, h) model = 
   let
-    speedColor = ("color", if shipSpeed model.ship < speedCutoff then "#0a0" else "#f00")
-    rollColor = ("color", if abs(model.ship.roll) < rollCutoff then "#0a0" else "#f00")
+    fuelColor = Color.rgba 255 255 255 255
+    speedColor = if shipSpeed model.ship < speedCutoff then (Color.rgba 0 170 0 255) else (Color.rgba 255 0 0 255)
+    rollColor = if abs(model.ship.roll) < rollCutoff then (Color.rgba 0 170 0 255) else (Color.rgba 255 0 0 255)
   in
-  div [Html.Attributes.style [("font-family", "monospace"), ("color", "#fff"), ("width", "200px")]]
-  [ p [] [ Html.text ("Fuel: " ++ toString model.ship.fuel) ]
-  , p [Html.Attributes.style [speedColor]] [ Html.text ("Speed: " ++ String.slice 0 6 (toString (shipSpeed model.ship))) ]
-  , p [Html.Attributes.style [rollColor]] [ Html.text ("Roll: " ++ String.slice 0 6 (toString (model.ship.roll))) ]
+  Render.group [  Render.move 0 0 <| Render.bold 12 "monospace" fuelColor ("Fuel: " ++ toString model.ship.fuel)
+                , Render.move 0 18 <| Render.bold 12 "monospace" speedColor ("Speed: " ++ String.slice 0 6 (toString (shipSpeed model.ship)))
+                , Render.move -0 36 <| Render.bold 12 "monospace" rollColor ("Roll: " ++ String.slice 0 6 (toString (model.ship.roll)))
   ]
 
 
@@ -386,4 +385,13 @@ generateLandscape =
     platformIndex = Random.int 0 2
     mainValues = [Random.float 0.1 0.2, Random.float 0.4 0.5, Random.float 0.7 0.9]
   in
-   (0.5, [(1.0, 0.8), (0.8, 0.6), (0.7, 0.4), (0.6, 0.9), (0.52, 1.0), (0.5, 1.0), (0.48, 1.0), (0.4, 0.8), (0.2, 0.4), (0.0, 0.3)])
+   (0.5, [  (1.0, 0.8)
+          , (0.8, 0.6)
+          , (0.7, 0.4)
+          , (0.6, 0.9)
+          , (0.52, 1.0)
+          , (0.5, 1.0)
+          , (0.48, 1.0)
+          , (0.4, 0.8)
+          , (0.2, 0.4)
+          , (0.0, 0.3)])
