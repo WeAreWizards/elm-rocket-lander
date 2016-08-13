@@ -4,8 +4,9 @@
     "repository": "https://github.com/user/project.git",
     "license": "BSD3",
     "source-directories": [
-        "."
-    ],
+        "./src",
+        "."    
+        ],
     "exposed-modules": [],
     "dependencies": {
         "Kwarrtz/render": "1.0.1 <= v < 2.0.0",

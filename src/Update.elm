@@ -1,99 +1,13 @@
-import Html.App as Html
-import Color
-import AnimationFrame
-import Window
+module Update exposing (..)
+
 import Keyboard exposing (KeyCode)
-import Html exposing (..)
-import String
-import Time exposing (Time)
 import Random
-import List
+
+
+import Models exposing (..)
+import Messages exposing (..)
+import Commands exposing (..)
 import Key exposing (..)
-import Graphics.Render as Render
-import Task
-
-type alias Radians = Float
-
-type GameState = PreRunning | Running | Won | Lost
-
-type alias Model =
-  { gravity: Float
-  , ship: Ship
-  , state: GameState
-  , platformPos: Float
-  , height: Int
-  , width: Int
-  }
-
-type alias KeyArrows = 
-  { x: Float
-  , y: Bool
-  }
-
-type alias Ship =
-  { x: Float
-  , y: Float
-  , vx: Float
-  , vy: Float
-  , roll: Radians
-  , boosting: Bool
-  , fuel: Float
-  , controls: KeyArrows
-  }
-
-
-makeGame : Model
-makeGame = { gravity = 0.000078
-           , ship = (Ship 0.9 0.4 0 0 0 False 1000 {x=0, y=False})
-           , state = PreRunning
-           , platformPos = 0.5
-           , height = 800
-           , width = 1600
-           }
-
-speedCutoff : Float
-speedCutoff = 0.002
-
-rollCutoff : Float
-rollCutoff = 0.19
-
-main: Program Never
-main =  
-  Html.program
-    { init = init
-    , update = update
-    , view = paint
-    , subscriptions = subscriptions
-    }
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.batch
-        [ AnimationFrame.diffs TimeUpdate
-        , Keyboard.downs KeyDown
-        , Keyboard.ups KeyUp
-        , Window.resizes (\{width, height} -> Resize width height)
-        ]
-
-init : ( Model, Cmd Msg )
-init =
-    ( makeGame, initialSizeCmd )
-
-initialSizeCmd : Cmd Msg
-initialSizeCmd =
-  Task.perform (\_ -> NoOp) sizeToMsg Window.size
-
-sizeToMsg : Window.Size -> Msg
-sizeToMsg size =
-  Resize size.width size.height
-
-type Msg
-    = TimeUpdate Time
-    | KeyDown KeyCode
-    | KeyUp KeyCode
-    | Resize Int Int
-    | NoOp
-
 
 ------------------------------------
 -- Update
@@ -271,112 +185,6 @@ toScreenCoords : (Int, Int) -> (Float, Float) -> (Float, Float)
 toScreenCoords (w, h) (x, y)=
   ((x - 0.5) * (toFloat w), (y - 0.5) * (toFloat h))
 
-------------------------------------
--- VIEW
-------------------------------------
-
-paint : Model -> Html Msg
-paint model =
-  let 
-    (w', h') = (model.width - 10, model.height - 10)
-    (w, h) = (toFloat w', toFloat h')  in
-    case model.state of
-      PreRunning -> Render.svg w h 
-        (Render.group
-        [ paintGame model (w', h')
-          , startScreen  
-        ])
-      Running -> Render.svg w h 
-        (Render.group
-        [ paintGame model (w', h')])
-      Lost -> Render.svg w h
-        (Render.group
-        [ paintGame model (w', h')
-        , lostScreen
-        ])
-      Won -> Render.svg w h
-        (Render.group
-        [ paintGame model (w', h')
-        , wonScreen
-        ])
-
-
-paintGame : Model -> (Int, Int) -> Render.Form Msg
-paintGame model (w, h) =
-  let fw = toFloat w
-      fh = toFloat h
-  in
-  Render.group
-  [ Render.solidFill Color.black(Render.rectangle fw fh)
-  , paintLandscape generateLandscape (w, h)
-  , paintPlatform model.platformPos (w, h)
-  , paintShip model.ship (w, h)
-  , Render.move (fw/2 - 200) -(toFloat h / 2 - 20) <| (statsScreen (w, h) model)
-  ]
-
-paintShip : Ship -> (Int, Int) -> Render.Form Msg
-paintShip ship (w, h) =
-  let
-    color = Color.rgba 255 0 0 255
-    screenCoords = (toScreenCoords (w, h) (ship.x, ship.y))
-  in
-  Render.rotate (ship.roll) <|
-  Render.rotate (pi) <|
-  Render.move 0 -20 <| {- Paint a bit higher so it looks like the ship dies on contact, not when deep in the land -}
-  Render.move (fst screenCoords) (snd screenCoords) <|
-  Render.move -10 0 <|
-  Render.solidFill color (Render.polygon [(0, 0), (10, -10), (10, -20), (-10, -20), (-10, -10)])
-
-paintLandscape : (Float, List (Float, Float)) -> (Int, Int) -> Render.Form Msg
-paintLandscape (platformPos, heights) (w, h) =
-  let closedLoop = heights ++ [(0.0, 1.0), (1.0, 1.0)]
-  in
-  Render.solidFill (Color.rgba 0 255 0 255)
-    (Render.polygon (List.map  (toScreenCoords (w, h)) closedLoop))
-
-paintPlatform : Float -> (Int, Int) -> Render.Form Msg
-paintPlatform platformPos (w, h) =
-  let 
-    xpos = (toFloat w) * (platformPos - 0.5)
-    ypos = (toFloat h / 2) - 5
-  in
-    Render.move xpos ypos <|
-    Render.solidFill (Color.rgba 255 0 0 255) (Render.rectangle 80 10)
-
-genericScreen : Color.Color -> String -> Render.Form Msg
-genericScreen borderColor heading = 
-  let
-    width = 440
-    height = 150
-    offset = -( width / 2) + 5 
-  in
-  Render.group [  Render.solidFillWithBorder (Color.rgba 255 255 255 255) 2 borderColor (Render.rectangle width height)
-                , Render.move offset -30 <| Render.bold 20 "monospace" (Color.rgba 0 0 0 255) heading   
-                , Render.move offset 0 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Land gently on the red platform before running out of fuel."
-                , Render.move offset 18 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Use < and > to roll the ship, ^ to boost."
-                , Render.move offset 36 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Press SPACE to start."
-  ]
-
-startScreen: Render.Form Msg
-startScreen = genericScreen (Color.rgba 255 0 0 255) "Rocket lander in Elm."
-lostScreen: Render.Form Msg
-lostScreen = genericScreen (Color.rgba 170 0 0 255) "Ouch!"
-wonScreen: Render.Form Msg
-wonScreen = genericScreen (Color.rgba 0 170 0 255) "Good job, commander."
-
-statsScreen : (Int, Int) -> Model -> Render.Form Msg
-statsScreen (w, h) model = 
-  let
-    fuelColor = Color.rgba 255 255 255 255
-    speedColor = if shipSpeed model.ship < speedCutoff then (Color.rgba 0 170 0 255) else (Color.rgba 255 0 0 255)
-    rollColor = if abs(model.ship.roll) < rollCutoff then (Color.rgba 0 170 0 255) else (Color.rgba 255 0 0 255)
-  in
-  Render.group [  Render.move 0 0 <| Render.bold 12 "monospace" fuelColor ("Fuel: " ++ toString model.ship.fuel)
-                , Render.move 0 18 <| Render.bold 12 "monospace" speedColor ("Speed: " ++ String.slice 0 6 (toString (shipSpeed model.ship)))
-                , Render.move -0 36 <| Render.bold 12 "monospace" rollColor ("Roll: " ++ String.slice 0 6 (toString (model.ship.roll)))
-  ]
-
-
 {- Make a landscape with a platform position and some mountain-looking
    things -}
 generateLandscape : (Float, List (Float, Float))
@@ -395,3 +203,4 @@ generateLandscape =
           , (0.4, 0.8)
           , (0.2, 0.4)
           , (0.0, 0.3)])
+
