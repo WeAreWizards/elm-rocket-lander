@@ -246,17 +246,17 @@ shipUpdate g boosting roll ship =
                     0
             }
 
-        fuel' =
+        fuel_ =
             if boosting then
                 ship.fuel - 3
             else
                 ship.fuel
 
-        fuel'' =
+        fuel__ =
             if abs roll > 0 then
-                fuel' - 1
+                fuel_ - 1
             else
-                fuel'
+                fuel_
     in
         { ship
             | vy = ship.vy + g - accell.y
@@ -264,7 +264,7 @@ shipUpdate g boosting roll ship =
             , y = ship.y + ship.vy
             , x = ship.x + ship.vx
             , boosting = boosting
-            , fuel = fuel''
+            , fuel = fuel__
             , roll = ship.roll + ((toFloat roll) / 20.0)
         }
 
@@ -277,7 +277,7 @@ shipSpeed ship =
 isShipLanded : Ship -> Float -> Bool
 isShipLanded ship platformPos =
     abs ship.y
-        > 0.99
+        > 0.97
         && abs (ship.x - platformPos)
         < 0.1
         && shipSpeed ship
@@ -288,15 +288,13 @@ isShipLanded ship platformPos =
 
 
 {- check whether the ship is below a list of half-planes -}
-
-
 isShipAlive : ( Float, Float ) -> List ( Float, Float ) -> Bool
 isShipAlive ( sx, sy ) landscape =
     let
         hits =
             List.foldl (isHit ( sx, sy )) ( False, ( 1, 1 ) ) landscape
     in
-        fst hits
+        Tuple.first hits
 
 
 isHit : ( Float, Float ) -> ( Float, Float ) -> ( Bool, ( Float, Float ) ) -> ( Bool, ( Float, Float ) )
@@ -335,15 +333,13 @@ isHit ( shipX, shipY ) ( newX, newY ) ( hitSoFar, ( prevX, prevY ) ) =
 
 toScreenCoords : ( Int, Int ) -> ( Float, Float ) -> ( Float, Float )
 toScreenCoords ( w, h ) ( x, y ) =
-    ( (x - 0.5) * (toFloat w), (y - 0.5) * (toFloat h) )
+    ( (x ) * (toFloat w), (y ) * (toFloat h) )
 
 
 
 {- Make a landscape with a platform position and some mountain-looking
    things
 -}
-
-
 generateLandscape : ( Float, List ( Float, Float ) )
 generateLandscape =
     let

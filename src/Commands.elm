@@ -7,7 +7,7 @@ import Window
 
 initialSizeCmd : Cmd Msg
 initialSizeCmd =
-    Task.perform (\_ -> NoOp) sizeToMsg Window.size
+    Task.perform sizeToMsg Window.size
 
 
 sizeToMsg : Window.Size -> Msg

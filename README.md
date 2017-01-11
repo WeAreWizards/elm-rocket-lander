@@ -1,6 +1,6 @@
 # Rocket lander in Elm
 
-The example was updated from previous versions of elm-compiler to work with 0.17.
+The example was updated from previous versions of elm-compiler to work with 0.18.
 
 To run:
 

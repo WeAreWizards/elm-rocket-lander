@@ -24,5 +24,14 @@ fromCode keyCode =
         39 ->
             ArrowRight
 
+        72 ->
+            ArrowLeft
+
+        75 ->
+            ArrowUp
+
+        76 ->
+            ArrowRight
+
         _ ->
             Unknown

@@ -1,9 +1,9 @@
 module View exposing (..)
 
 import Html exposing (..)
-import Color
+import Color exposing (Color, rgba, rgb, black)
 import String
-import Graphics.Render as Render
+import Graphics.Render as Render exposing (..)
 import Models exposing (..)
 import Messages exposing (..)
 import Update exposing (..)
@@ -12,40 +12,52 @@ import Update exposing (..)
 paint : Model -> Html Msg
 paint model =
     let
-        ( w', h' ) =
+        ( w_, h_ ) =
             ( model.width - 10, model.height - 10 )
 
         ( w, h ) =
-            ( toFloat w', toFloat h' )
+            ( toFloat w_, toFloat h_ )
     in
         case model.state of
             PreRunning ->
-                Render.svg w h
+                Render.svg 0
+                    0
+                    w
+                    h
                     (Render.group
-                        [ paintGame model ( w', h' )
-                        , startScreen
+                        [ paintGame model ( w_, h_ )
+                        , startScreen ( w_, h_ )
                         ]
                     )
 
             Running ->
-                Render.svg w h
+                Render.svg 0
+                    0
+                    w
+                    h
                     (Render.group
-                        [ paintGame model ( w', h' ) ]
+                        [ paintGame model ( w_, h_ ) ]
                     )
 
             Lost ->
-                Render.svg w h
+                Render.svg 0
+                    0
+                    w
+                    h
                     (Render.group
-                        [ paintGame model ( w', h' )
-                        , lostScreen
+                        [ paintGame model ( w_, h_ )
+                        , lostScreen ( w_, h_ )
                         ]
                     )
 
             Won ->
-                Render.svg w h
+                Render.svg 0
+                    0
+                    w
+                    h
                     (Render.group
-                        [ paintGame model ( w', h' )
-                        , wonScreen
+                        [ paintGame model ( w_, h_ )
+                        , wonScreen ( w_, h_ )
                         ]
                     )
 
@@ -59,12 +71,12 @@ paintGame model ( w, h ) =
         fh =
             toFloat h
     in
-        Render.group
-            [ Render.solidFill Color.black (Render.rectangle fw fh)
+        group
+            [ rectangle fw fh |> filled (solid <| black)  |> position ( fw / 2, fh / 2 )
             , paintLandscape generateLandscape ( w, h )
             , paintPlatform model.platformPos ( w, h )
             , paintShip model.ship ( w, h )
-            , Render.move (fw / 2 - 200) -(toFloat h / 2 - 20) <| (statsScreen ( w, h ) model)
+            , statsScreen (w, h) model |> position ( fw - 100, 50 )
             ]
 
 
@@ -72,17 +84,18 @@ paintShip : Ship -> ( Int, Int ) -> Render.Form Msg
 paintShip ship ( w, h ) =
     let
         color =
-            Color.rgba 255 0 0 255
+            rgba 255 0 0 255
 
         screenCoords =
             (toScreenCoords ( w, h ) ( ship.x, ship.y ))
     in
-        Render.rotate (ship.roll) <|
-            Render.rotate (pi) <|
-                Render.move 0 -20 <|
-                    {- Paint a bit higher so it looks like the ship dies on contact, not when deep in the land -} Render.move (fst screenCoords) (snd screenCoords) <|
-                        Render.move -10 0 <|
-                            Render.solidFill color (Render.polygon [ ( 0, 0 ), ( 10, -10 ), ( 10, -20 ), ( -10, -20 ), ( -10, -10 ) ])
+        polygon [ ( 0, 0 ), ( 10, -10 ), ( 10, -20 ), ( -10, -20 ), ( -10, -10 ) ]
+            |> filled (solid <| color)
+            |> position ( -10, 0 )
+            |> position screenCoords
+            |> position ( 0, -20 )
+            |> angle (ship.roll - pi)
+            |> position screenCoords
 
 
 paintLandscape : ( Float, List ( Float, Float ) ) -> ( Int, Int ) -> Render.Form Msg
@@ -91,25 +104,26 @@ paintLandscape ( platformPos, heights ) ( w, h ) =
         closedLoop =
             heights ++ [ ( 0.0, 1.0 ), ( 1.0, 1.0 ) ]
     in
-        Render.solidFill (Color.rgba 0 255 0 255)
-            (Render.polygon (List.map (toScreenCoords ( w, h )) closedLoop))
+        polygon (List.map (toScreenCoords ( w, h )) closedLoop)
+            |> filled (solid <| (rgba 0 255 0 255))
 
 
 paintPlatform : Float -> ( Int, Int ) -> Render.Form Msg
 paintPlatform platformPos ( w, h ) =
     let
         xpos =
-            (toFloat w) * (platformPos - 0.5)
+            (toFloat w) * (platformPos)
 
         ypos =
-            (toFloat h / 2) - 5
+            (toFloat h ) - 1
     in
-        Render.move xpos ypos <|
-            Render.solidFill (Color.rgba 255 0 0 255) (Render.rectangle 80 10)
+        rectangle 80 10
+            |> filled (solid <| (rgba 255 0 0 255))
+            |> position ( xpos, ypos )
 
 
-genericScreen : Color.Color -> String -> Render.Form Msg
-genericScreen borderColor heading =
+genericScreen : ( Int, Int ) -> Color -> String -> Render.Form Msg
+genericScreen ( windowSizeX, windowSizeY ) borderColor heading =
     let
         width =
             440
@@ -117,53 +131,72 @@ genericScreen borderColor heading =
         height =
             150
 
-        offset =
-            -(width / 2) + 5
+        width_offset =
+            (width / 2)
+
+        height_offset =
+            (height / 2)
+
+        xPos =
+            (windowSizeX |> toFloat) / 2
+
+        yPos =
+            (windowSizeY |> toFloat) / 2
     in
-        Render.group
-            [ Render.solidFillWithBorder (Color.rgba 255 255 255 255) 2 borderColor (Render.rectangle width height)
-            , Render.move offset -30 <| Render.bold 20 "monospace" (Color.rgba 0 0 0 255) heading
-            , Render.move offset 0 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Land gently on the red platform before running out of fuel."
-            , Render.move offset 18 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Use < and > to roll the ship, ^ to boost."
-            , Render.move offset 36 <| Render.bold 12 "monospace" (Color.rgba 0 0 0 255) "Press SPACE to start."
+        group
+            [ filledAndBordered (solid <| rgb 255 255 255) 2 (solid <| borderColor) (rectangle (width * 2) (height * 2))
+            , drawText heading 20 ( 0, -30 ) (rgba 0 0 0 255)
+            , drawText "Land gently on the red platform before running out of fuel." 20 ( 0, 0 ) (rgba 0 0 0 255)
+            , drawText "Use < and > to roll the ship, ^ to boost." 20 ( 0, 18 ) (rgba 0 0 0 255)
+            , drawText "Press SPACE to start" 20 ( 0, 36 ) (rgba 0 0 0 255)
             ]
+            |> position ( xPos, yPos )
 
 
-startScreen : Render.Form Msg
-startScreen =
-    genericScreen (Color.rgba 255 0 0 255) "Rocket lander in Elm."
+drawText : String -> Int -> Point -> Color -> Form msg
+drawText textContent textSize pos color =
+    Render.text textSize textContent
+        |> fontColor color
+        |> fontFamily "monospace"
+        |> centered
+        |> position pos
 
 
-lostScreen : Render.Form Msg
-lostScreen =
-    genericScreen (Color.rgba 170 0 0 255) "Ouch!"
+startScreen : ( Int, Int ) -> Render.Form Msg
+startScreen windowSize =
+    genericScreen windowSize (rgba 255 0 0 255) "Rocket lander in Elm."
 
 
-wonScreen : Render.Form Msg
-wonScreen =
-    genericScreen (Color.rgba 0 170 0 255) "Good job, commander."
+lostScreen : ( Int, Int ) -> Render.Form Msg
+lostScreen windowSize =
+    genericScreen windowSize (Color.rgba 170 0 0 255) "Ouch!"
+
+
+wonScreen : ( Int, Int ) -> Render.Form Msg
+wonScreen windowSize =
+    genericScreen windowSize (Color.rgba 0 170 0 255) "Good job, commander."
 
 
 statsScreen : ( Int, Int ) -> Model -> Render.Form Msg
 statsScreen ( w, h ) model =
     let
         fuelColor =
-            Color.rgba 255 255 255 255
+            rgba 255 255 255 255
 
         speedColor =
             if shipSpeed model.ship < speedCutoff then
-                (Color.rgba 0 170 0 255)
+                (rgba 0 170 0 255)
             else
-                (Color.rgba 255 0 0 255)
+                (rgba 255 0 0 255)
 
         rollColor =
             if abs (model.ship.roll) < rollCutoff then
-                (Color.rgba 0 170 0 255)
+                (rgba 0 170 0 255)
             else
-                (Color.rgba 255 0 0 255)
+                (rgba 255 0 0 255)
     in
-        Render.group
-            [ Render.move 0 0 <| Render.bold 12 "monospace" fuelColor ("Fuel: " ++ toString model.ship.fuel)
-            , Render.move 0 18 <| Render.bold 12 "monospace" speedColor ("Speed: " ++ String.slice 0 6 (toString (shipSpeed model.ship)))
-            , Render.move 0 36 <| Render.bold 12 "monospace" rollColor ("Roll: " ++ String.slice 0 6 (toString (model.ship.roll)))
+        group
+            [ drawText ("Fuel: " ++ toString model.ship.fuel) 12 ( 0, 0 ) fuelColor
+            , drawText ("Speed: " ++ String.slice 0 6 (toString (shipSpeed model.ship))) 12 ( 0, 18 ) speedColor
+            , drawText ("Roll: " ++ String.slice 0 6 (toString (model.ship.roll))) 12 ( 0, 36 ) rollColor
             ]
